@@ -1,0 +1,136 @@
+Прежде чем восстанавливать данные, остановите сервер PostgreSQL:
+ sudo systemctl stop postgresql 
+
+
+Создайте новый каталог для данных PostgreSQL:
+
+bash
+sudo mkdir -p /var/lib/postgresql/16/main
+sudo chown postgres:postgres /var/lib/postgresql/16/main
+
+Распакуйте base.tar в каталог данных:
+sudo -u postgres tar -xvf /BACKUP/$DATE/base.tar -C /var/lib/postgresql/16/main
+
+Распакуйте архив wal.tar
+sudo -u postgres tar -xvf /BACKUP/$DATE/wal.tar -C /var/lib/postgresql/16/main/pg_wal/
+
+Настройте права доступа
+Убедитесь, что все файлы и каталоги принадлежат пользователю postgres:
+
+bash
+sudo chown -R postgres:postgres /var/lib/postgresql/16/main
+
+Создайте файл recovery.signal (если требуется)
+Если вы восстанавливаетесь из бэкапа, создайте файл recovery.signal, чтобы указать PostgreSQL, что нужно выполнить восстановление:
+
+bash
+sudo touch /var/lib/postgresql/16/main/recovery.signal
+Добавьте следующие строки:
+
+ini
+Copy
+restore_command = 'cp /path/to/wal_archive/%f %p'
+recovery_target_timeline = 'latest'
+Здесь /path/to/wal_archive/ — путь к каталогу с WAL-файлами.
+
+
+Запустите PostgreSQL
+Запустите сервер PostgreSQL:
+
+bash
+sudo systemctl start postgresql
+
+И... У вас ничего не выйдет, надо просто решить эту беду error: connection to server on socket "/var/run/postgresql/.s.PGSQL.5432" failed: No such file or directory
+        Is the server running locally and accepting connections on that socket?
+
+Смотрим логи 
+sudo cat /var/log/postgresql/postgresql-16-main.log
+
+Проверяем список ошибок и вычленияем ERROR 
+Проверяем есть ли у нас в этот файл если нет то создаем
+sudo nano /var/lib/postgresql/16/main/postgresql.conf
+Добавим unix_socket_directories = '/var/run/postgresql'
+
+Проверка pg_hba.conf
+Откройте файл pg_hba.conf тоже надо, не знаю почему, просто этот файл должен.
+sudo nano /var/lib/postgresql/16/main/pg_hba.conf
+добавим 
+local   all             all                                     peer
+
+Перезапустите PostgreSQL
+После внесения изменений перезапустите PostgreSQL:
+
+bash
+sudo systemctl restart postgresql
+
+Проверьте сокет
+Убедитесь, что сокет PostgreSQL создан в /var/run/postgresql/.s.PGSQL.5432:
+
+bash
+ls -l /var/run/postgresql/
+
+Вручную запустите PostgreSQL
+Если сервер по-прежнему не запускается, попробуйте запустить его вручную от имени пользователя postgres:
+
+bash
+sudo -u postgres /usr/lib/postgresql/16/bin/pg_ctl -D /var/lib/postgresql/16/main start
+
+
+bash
+sudo chown -R postgres:postgres /var/lib/postgresql/16/main
+sudo chmod -R 750 /var/lib/postgresql/16/main
+Каталог для сокетов:
+bash
+sudo chown -R postgres:postgres /var/run/postgresql
+sudo chmod -R 750 /var/run/postgresql
+
+
+
+Проверьте конфигурацию PostgreSQL
+Убедитесь, что в файле postgresql.conf настроен правильный путь для сокетов.
+
+Откройте файл конфигурации:
+
+bash
+sudo nano /var/lib/postgresql/16/main/postgresql.conf
+Убедитесь, что параметр unix_socket_directories указывает на /var/run/postgresql:
+
+ini
+unix_socket_directories = '/var/run/postgresql'
+Также проверьте параметр listen_addresses. Он должен включать localhost или *:
+
+ini
+listen_addresses = 'localhost'
+
+Удалите файл postmaster.pid (актуально для старых версий)
+Если PostgreSQL не был корректно остановлен, файл postmaster.pid может блокировать запуск сервера. Удалите его:
+
+bash
+sudo rm /var/lib/postgresql/16/main/postmaster.pid
+
+Запустите PostgreSQL вручную
+Попробуйте запустить PostgreSQL вручную, чтобы увидеть подробные сообщения об ошибках:
+
+bash
+sudo -u postgres /usr/lib/postgresql/16/bin/pg_ctl -D /var/lib/postgresql/16/main start
+
+В бэкапе возможен мусор, который просто не дает запустить сервер
+Проверьте наличие файла recovery.signal
+Если файл recovery.signal присутствует в каталоге данных, PostgreSQL попытается выполнить восстановление. Убедитесь, что это необходимо. Если восстановление не требуется, удалите файл:
+
+bash
+sudo rm /var/lib/postgresql/16/main/recovery.signal
+7. Проверьте наличие файла backup_label
+Если файл backup_label присутствует в каталоге данных, PostgreSQL попытается восстановиться из резервной копии. Если восстановление не требуется, удалите файл:
+
+bash
+sudo rm /var/lib/postgresql/16/main/backup_label
+
+Ну если это не получилось то последние может поможет, а может и нет, опен сорс, никто не едет как оно работает
+Пересоздайте каталог для сокетов
+Если каталог /var/run/postgresql отсутствует или поврежден, создайте его вручную:
+
+bash
+sudo mkdir -p /var/run/postgresql
+sudo chown postgres:postgres /var/run/postgresql
+sudo chmod 750 /var/run/postgresql
