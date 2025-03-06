@@ -1,0 +1,42 @@
+#Останавливаем сервер
+sudo systemctl stop postgresql
+#Сохраняем старую папку мейн с меткой олд
+sudo mv /var/lib/postgresql/16/main /var/lib/postgresql/16/main_old
+#Создаем папку маин
+sudo mkdir -p /var/lib/postgresql/16/main
+
+# Переходим в дирикторию с бэкапом. <дата> — это директория с вашим бэкапом
+
+cd /BACKUP/<дата>  
+sudo tar -xvf base.tar -C /var/lib/postgresql/16/main
+sudo tar -xvf wal.tar -C /var/lib/postgresql/16/main/pg_backup
+#Открываем файл конфигурации и меняем значения в нем
+sudo nano /etc/postgresql/16/main/postgresql.conf
+
+Вписываем эти строки
+restore_command = 'cp /var/lib/postgresql/<версия>/wal_archive/%f "%p"'
+recovery_target = 'immediate'
+#Создаем файл recovery.signal
+sudo touch /var/lib/postgresql/<версия>/main/recovery.signal
+#Передаем право пользованием postgres и назначаем право использования 750
+sudo chown postgres:postgres /var/lib/postgresql/16/main
+sudo chmod -R 750 /var/lib/postgresql/16/main
+#Старт сервера
+sudo systemctl start postgresql
+#Если не работает то смотрим логи 
+sudo tail -f /var/log/postgresql/postgresql-16-main.log
+#Можно попробывать посмотреть и делать доступным файл ниже 
+sudo chown postgres:postgres /var/run/postgresql/.s.PGSQL.5432
+sudo chmod 777 /var/run/postgresql/.s.PGSQL.5432
+#Открыть pg_hba.confs
+sudo nano /etc/postgresql/16/main/pg_hba.conf
+#Убедитесь, что есть строка, разрешающая подключение через сокет:
+
+ini
+
+local   all             all                                     peer
+#Если вы хотите разрешить подключение для всех пользователей, измените peer на trust:
+
+ini
+
+local   all             all                                     trust
