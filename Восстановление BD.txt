@@ -19,7 +19,7 @@ recovery_target = 'immediate'
 #Создаем файл recovery.signal
 sudo touch /var/lib/postgresql/<версия>/main/recovery.signal
 #Передаем право пользованием postgres и назначаем право использования 750
-sudo chown postgres:postgres /var/lib/postgresql/16/main
+sudo chown -R postgres:postgres /var/lib/postgresql/16/main
 sudo chmod -R 750 /var/lib/postgresql/16/main
 #Старт сервера
 sudo systemctl start postgresql
@@ -40,3 +40,8 @@ local   all             all                                     peer
 ini
 
 local   all             all                                     trust
+
+
+#Для восстановления 
+#Выйти из режима восстановления
+sudo -u postgres /usr/lib/postgresql/16/bin/pg_ctl promote -D /var/lib/postgresql/16/main/
