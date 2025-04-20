@@ -1,0 +1,8 @@
+Create table servers_monitoring (	
+    id SERIAL PRIMARY KEY,
+    addres_server INTEGER NOT NULL,
+    timestamp TIMESTAMP NOT NULL,
+    cpu_usage FLOAT,
+    ram_usage INTEGER,
+    swap_usage INTEGER
+);

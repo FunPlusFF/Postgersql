@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Server Monitoring</title>
+</head>
+<body>
+    <h1>Monitoring Server</h1>
+    <div id="monitoring"></div>
+    <script>
+        fetch('/monitoring.json')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('monitoring').innerHTML = `
+                    <p>CPU: ${data.cpu_usage}%</p>
+                    <p>RAM: ${data.ram_usage} MB</p>
+                    <p>Swap: ${data.swap_usage} MB</p>
+                    <p>Last Updated: ${data.timestamp}</p>
+                `;
+            });
+    </script>
+</body>
+</html>
