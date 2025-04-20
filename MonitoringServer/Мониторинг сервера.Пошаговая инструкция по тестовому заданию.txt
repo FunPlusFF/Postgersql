@@ -1,0 +1,149 @@
+1. Создать виртуальною машину, в моем случаи виртуал бокс и установить десктопную версию убунту
+
+2. устанавливаем и настраиваем убунту, далее надо установить постгрес и проверить работу 
+sudo apt update
+sudo apt install postgresql postgresql-contrib -y
+sudo systemctl status postgresql
+sudo -u postgres psql
+
+3. В открытом постгресе создаем базу данных sysMonitoring_bd и создадим пользователя и даем ему привелегии
+
+CREATE DATABASE sysMonitoring_bd;
+GRANT ALL PRIVILEGES ON TABLE servers_monitoring TO monitoring_user;
+GRANT USAGE, SELECT ON SEQUENCE servers_monitoring_id_seq TO monitoring_user;"
+\q
+
+4 Создать таблицу 
+CREATE TABLE servers_monitoring (
+    id SERIAL PRIMARY KEY,
+    addres_server VARCHAR(15) NOT NULL,
+    timestamp TIMESTAMP NOT NULL,
+    cpu_usage FLOAT,
+    ram_usage INTEGER,
+    swap_usage INTEGER
+);
+
+5. Создать скрипт 
+#!/bin/bash
+
+# Параметры PostgreSQL
+DB_NAME="sys_monitoring_db""
+DB_USER="monitoring_user"
+DB_PASSWORD="qwerty"
+
+# Получение метрик с проверкой на пустые значения
+CPU_USAGE=$(top -bn1 | grep "Cpu(s)" | awk '{print $2 + $4}')
+RAM_USAGE=$(free -m | awk '/Mem:/ {print $3}')
+SWAP_USAGE=$(free -m | awk '/Swap:/ {print $3}')
+IP_ADDRESS=$(hostname -I | awk '{print $1}')
+TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
+
+# Проверка и подстановка значений по умолчанию, если метрики не получены
+[ -z "$CPU_USAGE" ] && CPU_USAGE=0
+[ -z "$RAM_USAGE" ] && RAM_USAGE=0
+[ -z "$SWAP_USAGE" ] && SWAP_USAGE=0
+[ -z "$IP_ADDRESS" ] && IP_ADDRESS="0.0.0.0"
+
+# Запись в PostgreSQL
+export PGPASSWORD="$DB_PASSWORD"
+psql -h localhost -U "$DB_USER" -d "$DB_NAME" -c "
+INSERT INTO servers_monitoring (addres_server, timestamp, cpu_usage, ram_usage, swap_usage)
+VALUES ('$IP_ADDRESS', '$TIMESTAMP', $CPU_USAGE, $RAM_USAGE, $SWAP_USAGE);
+"
+unset PGPASSWORD
+
+6. Проверка скрипта на работоспособность
+
+sudo /usr/local/bin/monitoring_server.sh
+
+
+7. Поставить скрипт на мониторинг в задачи кроунтаб
+
+sudo crontab -e
+
+Вписать где и как часто будет исполняться скрипт
+*/5 * * * * /usr/local/bin/название_скрипта.sh
+
+8.Устанавливаем nginx
+sudo apt install nginx -y
+
+9.Создаем скрипт для генерации джесон 
+#!/bin/bash
+
+# Параметры PostgreSQL
+DB_NAME="sys_monitoring_db"
+DB_USER="monitoring_user"
+DB_PASSWORD="qwerty"
+
+# Путь к JSON-файлу
+JSON_FILE="/var/www/html/metrics.json"
+
+# Получаем последние метрики из БД
+export PGPASSWORD="$DB_PASSWORD"
+METRICS_JSON=$(psql -h localhost -U "$DB_USER" -d "$DB_NAME" -t -c "
+SELECT json_build_object(
+    'timestamp', timestamp,
+    'cpu_usage', cpu_usage,
+    'ram_usage', ram_usage,
+    'swap_usage', swap_usage,
+    'ip_address', addres_server
+) 
+FROM servers_monitoring 
+ORDER BY timestamp DESC 
+LIMIT 1;" | jq -s '.[0]')
+
+# Записываем в JSON-файл
+echo "$METRICS_JSON" > "$JSON_FILE"
+unset PGPASSWORD
+
+# Права для Nginx
+chown www-data:www-data "$JSON_FILE"
+chmod 644 "$JSON_FILE"
+
+10.Установите jq для обработки JSON
+
+sudo apt update && sudo apt install jq -y
+
+11. добавляем в планировщик создание Джейсон файла
+sudo crontab -e
+Добавьте строку (обновление каждые 5 минут):
+
+*/5 * * * * /usr/local/bin/generate_metrics_json.sh
+
+11.1 выдать права на исполнение скрипта
+sudo chmod +x /usr/local/bin/generate_metrics_json.sh
+
+12. Проверка json http://localhost/metrics.json
+
+13. Проверка показаний  созадание и проверка показаний http://localhost/metrics.index
+
+код html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Server Metrics</title>
+    <script>
+        async function loadMetrics() {
+            const response = await fetch('/metrics.json');
+            const data = await response.json();
+            document.getElementById('metrics').innerHTML = `
+                <p>IP: ${data.ip_address}</p>
+                <p>CPU: ${data.cpu_usage}%</p>
+                <p>RAM: ${data.ram_usage} MB</p>
+                <p>Updated: ${data.timestamp}</p>
+            `;
+        }
+        // Обновлять каждые 10 секунд
+        setInterval(loadMetrics, 10000);
+        loadMetrics();
+    </script>
+</head>
+<body>
+    <h1>Server Metrics</h1>
+    <div id="metrics"></div>
+</body>
+</html>
+
+
+
+ 
