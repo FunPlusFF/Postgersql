@@ -1,47 +1,34 @@
-#Останавливаем сервер
+
+**Делаем полный бекап кластера
+sudo -u postgres mkdir -p /var/lib/postgresql/backups
+
+**останавливаем СУБД
 sudo systemctl stop postgresql
-#Сохраняем старую папку мейн с меткой олд
-sudo mv /var/lib/postgresql/16/main /var/lib/postgresql/16/main_old
-#Создаем папку маин
-sudo mkdir -p /var/lib/postgresql/16/main
+**На всякий сохроняем старый бэкап
+sudo mv /var/lib/postgresql/16/main  /var/lib/postgresql/16/main_old1
+**Распаковываем бэкап от имени постресса так как он собственник бэкапа
+sudo -u postgres mkdir /var/lib/postgresql/16/main
+sudo -u postgres tar -xzf /var/lib/postgresql/backups/full_backup_.../base.tar.gz -C /var/lib/postgresql/16/main
+sudo -u postgres tar -xzf /var/lib/postgresql/backups/full_backup_.../base.tar.gz -C /var/lib/postgresql/16/main
+**настраиваем Восстановление
+sudo -u postgres nano /var/lib/postgresql/16/main/postgresql.auto.conf
 
-# Переходим в дирикторию с бэкапом. <дата> — это директория с вашим бэкапом
+restore_command = 'cp /var/lib/postgresql/wal_archive/000000010000000000000006 /var/lib/postgresql/16/main/pg_wal'
+recovery_target_time = '2023-11-15 14:30:00' # опционально - до какой даты восстанавливать но надо знать точное время иначе ошибка 
+%f
+Заменяется на имя WAL-файла, который нужно восстановить (например, 000000010000000000000001).
 
-cd /BACKUP/<дата>  
-sudo tar -xvf base.tar -C /var/lib/postgresql/16/main
-sudo tar -xvf wal.tar -C /var/lib/postgresql/16/main/pg_backup
-#Открываем файл конфигурации и меняем значения в нем
-sudo nano /etc/postgresql/16/main/postgresql.conf
+%p
+Заменяется на полный целевой путь, куда нужно скопировать WAL-файл внутри каталога данных PostgreSQL (например, /var/lib/postgresql/14/main/pg_wal/000000010000000000000001).
 
-Вписываем эти строки
-restore_command = 'cp /var/lib/postgresql/<версия>/wal_archive/%f "%p"'
-recovery_target = 'immediate'
 #Создаем файл recovery.signal
-sudo touch /var/lib/postgresql/<версия>/main/recovery.signal
+sudo touch /var/lib/postgresql/16/main/recovery.signal
+
 #Передаем право пользованием postgres и назначаем право использования 750
 sudo chown -R postgres:postgres /var/lib/postgresql/16/main
 sudo chmod -R 750 /var/lib/postgresql/16/main
+
 #Старт сервера
 sudo systemctl start postgresql
 #Если не работает то смотрим логи 
 sudo tail -f /var/log/postgresql/postgresql-16-main.log
-#Можно попробывать посмотреть и делать доступным файл ниже 
-sudo chown postgres:postgres /var/run/postgresql/.s.PGSQL.5432
-sudo chmod 777 /var/run/postgresql/.s.PGSQL.5432
-#Открыть pg_hba.confs
-sudo nano /etc/postgresql/16/main/pg_hba.conf
-#Убедитесь, что есть строка, разрешающая подключение через сокет:
-
-ini
-
-local   all             all                                     peer
-#Если вы хотите разрешить подключение для всех пользователей, измените peer на trust:
-
-ini
-
-local   all             all                                     trust
-
-
-#Для восстановления 
-#Выйти из режима восстановления
-sudo -u postgres /usr/lib/postgresql/16/bin/pg_ctl promote -D /var/lib/postgresql/16/main/
